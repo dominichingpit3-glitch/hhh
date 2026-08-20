@@ -24,7 +24,7 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
 
-      - name: Prepare Project Environment
+      - name: Prepare Project and Fix Compose Compatibility
         run: |
           if [ -d "hhh-main" ]; then
             echo "PROJECT_DIR=hhh-main" >> $GITHUB_ENV
@@ -36,18 +36,22 @@ jobs:
 
           cd $TARGET_DIR
 
+          # Fix Gradle wrapper
           if [ ! -f "gradlew" ]; then
-            gradle wrapper
+            gradle wrapper --gradle-version 8.7
           fi
           chmod +x gradlew
 
+          # SDK configuration
           if [ ! -f "local.properties" ]; then
             echo "sdk.dir=/usr/local/lib/android/sdk" > local.properties
           fi
 
+          # Google services dummy file matching exact package name
           mkdir -p app
           echo '{"project_info":{"project_number":"0","project_id":"dummy","storage_bucket":"dummy.appspot.com"},"client":[{"client_info":{"mobilesdk_app_id":"1:0:android:0","android_client_info":{"package_name":"com.aistudio.researchassistant.qkrvwx"}},"oauth_client":[],"api_key":[{"current_key":"dummy"}],"services":{"appinvite_service":{"other_platform_oauth_client":[]}}}]}' > app/google-services.json
 
+          # Generate debug keystore
           if [ ! -f "debug.keystore" ]; then
             keytool -genkey -v -keystore debug.keystore \
               -storepass android -alias androiddebugkey \
@@ -55,8 +59,12 @@ jobs:
               -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
           fi
 
-          # Fix KSP AWT Headless Exception & JVM memory
+          # Auto-patch legacy compose compiler options to prevent Kotlin 2.x crash
+          find . -name "build.gradle*" -exec sed -i '/kotlinCompilerExtensionVersion/d' {} +
+
+          # JVM heap & Headless execution flags for KSP / AWT
           echo "org.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=1024m -Djava.awt.headless=true" >> gradle.properties
+          echo "org.gradle.warning.mode=none" >> gradle.properties
 
       - name: Build Debug APK
         run: |
