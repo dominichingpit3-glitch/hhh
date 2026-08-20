@@ -24,31 +24,45 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
 
-      - name: Audit & Prepare Environment
+      - name: Audit & Prepare Project Structure
         run: |
-          # 1. Detect if project files are inside 'hhh-main' or repository root
+          # Detect root directory vs hhh-main subfolder
           if [ -d "hhh-main" ]; then
             echo "PROJECT_DIR=hhh-main" >> $GITHUB_ENV
-            CD_DIR="hhh-main"
+            TARGET_DIR="hhh-main"
           else
             echo "PROJECT_DIR=." >> $GITHUB_ENV
-            CD_DIR="."
+            TARGET_DIR="."
           fi
-          
-          cd $CD_DIR
 
-          # 2. Generate Gradle Wrapper if missing from resource list
+          cd $TARGET_DIR
+
+          # Fix Missing Gradle Wrapper
           if [ ! -f "gradlew" ]; then
-            echo "Gradle wrapper missing. Generating wrapper..."
+            echo "Generating missing Gradle wrapper..."
             gradle wrapper
           fi
-
-          # 3. Ensure executable permissions
           chmod +x gradlew
 
-          # 4. Create dummy local.properties if needed
+          # Fix Missing local.properties
           if [ ! -f "local.properties" ]; then
             echo "sdk.dir=/usr/local/lib/android/sdk" > local.properties
+          fi
+
+          # Fix Missing google-services.json (Prevents Google Services Plugin error)
+          if [ ! -f "app/google-services.json" ]; then
+            echo "Creating dummy google-services.json..."
+            mkdir -p app
+            echo '{"project_info":{"project_number":"0","project_id":"dummy","storage_bucket":"dummy.appspot.com"},"client":[{"client_info":{"mobilesdk_app_id":"1:0:android:0","android_client_info":{"package_name":"com.example.app"}},"oauth_client":[],"api_key":[{"current_key":"dummy"}],"services":{"appinvite_service":{"other_platform_oauth_client":[]}}}]}' > app/google-services.json
+          fi
+
+          # Fix Missing debug.keystore (Prevents validateSigningDebug task crash)
+          if [ ! -f "debug.keystore" ]; then
+            echo "Generating temporary debug.keystore..."
+            keytool -genkey -v -keystore debug.keystore \
+              -storepass android -alias androiddebugkey \
+              -keypass android -keyalg RSA -keysize 2048 \
+              -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
           fi
 
       - name: Build Debug APK
