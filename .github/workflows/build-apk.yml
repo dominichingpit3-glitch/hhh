@@ -24,9 +24,8 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
 
-      - name: Prepare Project and Fix Known Issues
+      - name: Prepare Project and Fix Workflow Environment
         run: |
-          # 1. Handle root directory or nested subfolder execution
           if [ -d "hhh-main" ]; then
             echo "PROJECT_DIR=hhh-main" >> $GITHUB_ENV
             TARGET_DIR="hhh-main"
@@ -37,38 +36,33 @@ jobs:
 
           cd $TARGET_DIR
 
-          # 2. Fix missing Gradle Wrapper and set executable permissions
           if [ ! -f "gradlew" ]; then
-            echo "Generating missing Gradle wrapper..."
             gradle wrapper
           fi
           chmod +x gradlew
 
-          # 3. Create local.properties with standard Android SDK location
           if [ ! -f "local.properties" ]; then
             echo "sdk.dir=/usr/local/lib/android/sdk" > local.properties
           fi
 
-          # 4. Generate google-services.json dynamically with exact matching package name
           mkdir -p app
           echo '{"project_info":{"project_number":"0","project_id":"dummy","storage_bucket":"dummy.appspot.com"},"client":[{"client_info":{"mobilesdk_app_id":"1:0:android:0","android_client_info":{"package_name":"com.aistudio.researchassistant.qkrvwx"}},"oauth_client":[],"api_key":[{"current_key":"dummy"}],"services":{"appinvite_service":{"other_platform_oauth_client":[]}}}]}' > app/google-services.json
 
-          # 5. Generate missing debug keystore expected by validateSigningDebug
           if [ ! -f "debug.keystore" ]; then
-            echo "Generating temporary debug.keystore..."
             keytool -genkey -v -keystore debug.keystore \
               -storepass android -alias androiddebugkey \
               -keypass android -keyalg RSA -keysize 2048 \
               -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
           fi
 
-          # 6. Allocate sufficient JVM heap memory to prevent runner OOM errors
+          # Disable deprecation warning noise and configure memory
+          echo "org.gradle.warning.mode=none" >> gradle.properties
           echo "org.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=1024m" >> gradle.properties
 
       - name: Build Debug APK
         run: |
           cd ${{ env.PROJECT_DIR }}
-          ./gradlew assembleDebug --stacktrace --no-daemon
+          ./gradlew assembleDebug --info --stacktrace --no-daemon
 
       - name: Upload Generated APK
         uses: actions/upload-artifact@v4
